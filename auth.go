@@ -11,31 +11,36 @@ import (
 )
 
 const (
-	TokenKey  = "token"
-	CookieKey = "auth_session"
+	TokenKey            = "token"
+	CookieKey           = "auth_session"
+	maxRateLimitEntries = 10000
 )
 
 type AuthRateLimiter struct {
-	attempts map[string]int
-	lastTry  map[string]time.Time
-	mu       sync.RWMutex
+	attempts   map[string]int
+	lastTry    map[string]time.Time
+	lastAccess map[string]time.Time
+	mu         sync.RWMutex
 }
 
 func NewAuthRateLimiter() *AuthRateLimiter {
 	return &AuthRateLimiter{
-		attempts: make(map[string]int),
-		lastTry:  make(map[string]time.Time),
+		attempts:   make(map[string]int),
+		lastTry:    make(map[string]time.Time),
+		lastAccess: make(map[string]time.Time),
 	}
 }
 
 func (rl *AuthRateLimiter) isBlocked(ip string) bool {
-	rl.mu.RLock()
-	defer rl.mu.RUnlock()
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
 
 	attempts, exists := rl.attempts[ip]
 	if !exists {
 		return false
 	}
+
+	rl.lastAccess[ip] = time.Now()
 
 	if rl.shouldResetAttemptsForIP(ip) {
 		rl.resetAttemptsForIP(ip)
@@ -53,14 +58,47 @@ func (rl *AuthRateLimiter) shouldResetAttemptsForIP(ip string) bool {
 func (rl *AuthRateLimiter) resetAttemptsForIP(ip string) {
 	delete(rl.attempts, ip)
 	delete(rl.lastTry, ip)
+	delete(rl.lastAccess, ip)
 }
 
 func (rl *AuthRateLimiter) recordFailedAttempt(ip string) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	if len(rl.attempts) >= maxRateLimitEntries {
+		if _, exists := rl.attempts[ip]; !exists {
+			rl.evictOldestEntry()
+		}
+	}
+
+	now := time.Now()
 	rl.attempts[ip]++
-	rl.lastTry[ip] = time.Now()
+	rl.lastTry[ip] = now
+	rl.lastAccess[ip] = now
+}
+
+func (rl *AuthRateLimiter) evictOldestEntry() {
+	if len(rl.lastAccess) == 0 {
+		return
+	}
+
+	var oldestIP string
+	var oldestTime time.Time
+	first := true
+
+	for ip, accessTime := range rl.lastAccess {
+		if first || accessTime.Before(oldestTime) {
+			oldestIP = ip
+			oldestTime = accessTime
+			first = false
+		}
+	}
+
+	if oldestIP != "" {
+		delete(rl.attempts, oldestIP)
+		delete(rl.lastTry, oldestIP)
+		delete(rl.lastAccess, oldestIP)
+	}
 }
 
 func hashToken(token string) string {
