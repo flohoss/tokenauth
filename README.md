@@ -7,6 +7,7 @@ A Traefik middleware plugin that provides token-based authentication with secure
 - Token-based authentication via query parameters
 - Secure session cookies with SHA-256 hashed tokens
 - Built-in rate limiting (5 failed attempts per hour per IP)
+- Memory-safe with LRU eviction (max 10,000 tracked IPs)
 - Automatic URL cleanup (removes token from URL after authentication)
 - HttpOnly, Secure, and SameSite cookie protection
 
@@ -22,7 +23,7 @@ experimental:
   plugins:
     token-auth:
       moduleName: github.com/flohoss/token-auth
-      version: v0.1.1
+      version: v0.1.0
 ```
 
 Or with Docker labels:
@@ -30,7 +31,7 @@ Or with Docker labels:
 ```yaml
 labels:
   - 'traefik.experimental.plugins.token-auth.modulename=github.com/flohoss/token-auth'
-  - 'traefik.experimental.plugins.token-auth.version=v0.1.1'
+  - 'traefik.experimental.plugins.token-auth.version=v0.1.0'
 ```
 
 ### Dynamic Configuration
@@ -117,8 +118,19 @@ The middleware includes built-in protection against brute-force attacks:
 - **Window**: 1 hour
 - **Reset**: Automatically resets after 1 hour of the last failed attempt
 - **Response**: HTTP 429 "Too many failed attempts. Try again later."
+- **Memory Protection**: LRU eviction when tracking limit (10,000 IPs) is reached
 
 Rate limiting is tracked using the `X-Real-IP` header (set by Traefik).
+
+### Memory Safety
+
+The rate limiter implements memory protection to prevent unbounded growth:
+
+- **Max Tracked IPs**: 10,000 entries (~2.4 MB maximum memory)
+- **Eviction Policy**: Least Recently Used (LRU) - oldest entries are removed when limit is reached
+- **Expired Entries**: Entries older than 1 hour are automatically cleaned up during normal operation
+
+This ensures the middleware remains memory-efficient even under sustained attacks with rotating IPs.
 
 ## Security Considerations
 
@@ -138,7 +150,7 @@ services:
     image: traefik:v2.10
     command:
       - '--experimental.plugins.token-auth.modulename=github.com/flohoss/token-auth'
-      - '--experimental.plugins.token-auth.version=v0.1.1'
+      - '--experimental.plugins.token-auth.version=v0.1.0'
     ports:
       - '80:80'
       - '443:443'
