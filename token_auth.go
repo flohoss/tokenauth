@@ -17,17 +17,15 @@ const (
 )
 
 type AuthRateLimiter struct {
-	attempts   map[string]int
-	lastTry    map[string]time.Time
-	lastAccess map[string]time.Time
-	mu         sync.RWMutex
+	attempts map[string]int
+	lastTry  map[string]time.Time
+	mu       sync.RWMutex
 }
 
 func NewAuthRateLimiter() *AuthRateLimiter {
 	return &AuthRateLimiter{
-		attempts:   make(map[string]int),
-		lastTry:    make(map[string]time.Time),
-		lastAccess: make(map[string]time.Time),
+		attempts: make(map[string]int),
+		lastTry:  make(map[string]time.Time),
 	}
 }
 
@@ -39,8 +37,6 @@ func (rl *AuthRateLimiter) isBlocked(ip string) bool {
 	if !exists {
 		return false
 	}
-
-	rl.lastAccess[ip] = time.Now()
 
 	if rl.shouldResetAttemptsForIP(ip) {
 		rl.resetAttemptsForIP(ip)
@@ -58,7 +54,6 @@ func (rl *AuthRateLimiter) shouldResetAttemptsForIP(ip string) bool {
 func (rl *AuthRateLimiter) resetAttemptsForIP(ip string) {
 	delete(rl.attempts, ip)
 	delete(rl.lastTry, ip)
-	delete(rl.lastAccess, ip)
 }
 
 func (rl *AuthRateLimiter) recordFailedAttempt(ip string, maxEntries int) {
@@ -74,11 +69,10 @@ func (rl *AuthRateLimiter) recordFailedAttempt(ip string, maxEntries int) {
 	now := time.Now()
 	rl.attempts[ip]++
 	rl.lastTry[ip] = now
-	rl.lastAccess[ip] = now
 }
 
 func (rl *AuthRateLimiter) evictOldestEntry() {
-	if len(rl.lastAccess) == 0 {
+	if len(rl.lastTry) == 0 {
 		return
 	}
 
@@ -86,10 +80,10 @@ func (rl *AuthRateLimiter) evictOldestEntry() {
 	var oldestTime time.Time
 	first := true
 
-	for ip, accessTime := range rl.lastAccess {
-		if first || accessTime.Before(oldestTime) {
+	for ip, tryTime := range rl.lastTry {
+		if first || tryTime.Before(oldestTime) {
 			oldestIP = ip
-			oldestTime = accessTime
+			oldestTime = tryTime
 			first = false
 		}
 	}
@@ -97,7 +91,6 @@ func (rl *AuthRateLimiter) evictOldestEntry() {
 	if oldestIP != "" {
 		delete(rl.attempts, oldestIP)
 		delete(rl.lastTry, oldestIP)
-		delete(rl.lastAccess, oldestIP)
 	}
 }
 

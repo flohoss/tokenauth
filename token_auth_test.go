@@ -389,7 +389,6 @@ func TestRateLimiter_LRUEviction(t *testing.T) {
 		ip := "10.0.0." + string(rune(i))
 		rl.attempts[ip] = 1
 		rl.lastTry[ip] = time.Now()
-		rl.lastAccess[ip] = time.Now()
 	}
 	rl.mu.Unlock()
 
@@ -432,15 +431,12 @@ func TestRateLimiter_EvictOldestEntry(t *testing.T) {
 	now := time.Now()
 	rl.attempts["192.168.1.1"] = 3
 	rl.lastTry["192.168.1.1"] = now.Add(-3 * time.Minute)
-	rl.lastAccess["192.168.1.1"] = now.Add(-3 * time.Minute)
 
 	rl.attempts["192.168.1.2"] = 2
 	rl.lastTry["192.168.1.2"] = now.Add(-2 * time.Minute)
-	rl.lastAccess["192.168.1.2"] = now.Add(-2 * time.Minute)
 
 	rl.attempts["192.168.1.3"] = 1
 	rl.lastTry["192.168.1.3"] = now.Add(-1 * time.Minute)
-	rl.lastAccess["192.168.1.3"] = now.Add(-1 * time.Minute)
 
 	// Evict oldest (should remove 192.168.1.1)
 	rl.evictOldestEntry()
