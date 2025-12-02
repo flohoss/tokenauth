@@ -5,6 +5,7 @@ summary: Query-Token authentication middleware
 testData:
   tokenParam: token
   cookieName: auth_session
+  maxRateLimitEntries: 10000
   allowedTokens:
     - secret-token-1
     - secret-token-2

@@ -38,6 +38,7 @@ labels:
 Configure the middleware in your dynamic configuration:
 
 ```yaml
+# config.yml
 http:
   middlewares:
     my-token-auth:
@@ -45,6 +46,7 @@ http:
         token-auth:
           tokenParam: 'token'
           cookieName: 'auth_session'
+          maxRateLimitEntries: 10000
           allowedTokens:
             - 'your-secret-token-1'
             - 'your-secret-token-2'
@@ -54,10 +56,10 @@ Or with Docker labels:
 
 ```yaml
 labels:
-  - 'traefik.http.middlewares.my-token-auth.plugin.token-auth.tokenParam=token'
-  - 'traefik.http.middlewares.my-token-auth.plugin.token-auth.cookieName=auth_session'
-  - 'traefik.http.middlewares.my-token-auth.plugin.token-auth.allowedTokens[0]=your-secret-token-1'
-  - 'traefik.http.middlewares.my-token-auth.plugin.token-auth.allowedTokens[1]=your-secret-token-2'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.tokenParam=token'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookieName=auth_session'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.maxRateLimitEntries=10000'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.allowedTokens[0]=replace-with-secure-token'
 ```
 
 ### Apply to Routes
@@ -81,11 +83,12 @@ labels:
 
 ## Configuration Options
 
-| Parameter       | Type     | Default          | Description                                       |
-| --------------- | -------- | ---------------- | ------------------------------------------------- |
-| `tokenParam`    | string   | `"token"`        | Query parameter name for the authentication token |
-| `cookieName`    | string   | `"auth_session"` | Name of the session cookie                        |
-| `allowedTokens` | []string | `[]`             | List of valid authentication tokens               |
+| Parameter             | Type     | Default          | Description                                       |
+| --------------------- | -------- | ---------------- | ------------------------------------------------- |
+| `tokenParam`          | string   | `"token"`        | Query parameter name for the authentication token |
+| `cookieName`          | string   | `"auth_session"` | Name of the session cookie                        |
+| `maxRateLimitEntries` | int      | `10000`          | Maximum number of IPs tracked by rate limiter     |
+| `allowedTokens`       | []string | `[]`             | List of valid authentication tokens               |
 
 ## Usage
 
@@ -124,9 +127,11 @@ Rate limiting is tracked using the `X-Real-IP` header (set by Traefik).
 
 The rate limiter implements memory protection to prevent unbounded growth:
 
-- **Max Tracked IPs**: 10,000 entries (~2.4 MB maximum memory)
+- **Max Tracked IPs**: Configurable via `maxRateLimitEntries` (default: 10,000 entries, ~2.4 MB maximum memory)
 - **Eviction Policy**: Least Recently Used (LRU) - oldest entries are removed when limit is reached
 - **Expired Entries**: Entries older than 1 hour are automatically cleaned up during normal operation
+
+You can adjust the limit based on your needs. Lower values reduce memory usage but may affect rate limiting under heavy load. Higher values provide more tracking capacity but use more memory (~240 bytes per IP).
 
 This ensures the middleware remains memory-efficient even under sustained attacks with rotating IPs.
 

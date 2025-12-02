@@ -250,7 +250,7 @@ func TestRateLimiter_Basic(t *testing.T) {
 
 	// Record 4 failed attempts
 	for i := 0; i < 4; i++ {
-		rl.recordFailedAttempt("192.168.1.1")
+		rl.recordFailedAttempt("192.168.1.1", DefaultMaxRateLimitEntries)
 	}
 
 	if rl.isBlocked("192.168.1.1") {
@@ -258,7 +258,7 @@ func TestRateLimiter_Basic(t *testing.T) {
 	}
 
 	// 5th attempt should trigger block
-	rl.recordFailedAttempt("192.168.1.1")
+	rl.recordFailedAttempt("192.168.1.1", DefaultMaxRateLimitEntries)
 
 	if !rl.isBlocked("192.168.1.1") {
 		t.Error("IP should be blocked after 5 attempts")
@@ -270,7 +270,7 @@ func TestRateLimiter_Reset(t *testing.T) {
 
 	// Record 5 failed attempts
 	for i := 0; i < 5; i++ {
-		rl.recordFailedAttempt("192.168.1.1")
+		rl.recordFailedAttempt("192.168.1.1", DefaultMaxRateLimitEntries)
 	}
 
 	if !rl.isBlocked("192.168.1.1") {
@@ -292,7 +292,7 @@ func TestRateLimiter_MultipleIPs(t *testing.T) {
 
 	// Block first IP
 	for range 5 {
-		rl.recordFailedAttempt("192.168.1.1")
+		rl.recordFailedAttempt("192.168.1.1", DefaultMaxRateLimitEntries)
 	}
 
 	// Second IP should not be affected
@@ -302,7 +302,7 @@ func TestRateLimiter_MultipleIPs(t *testing.T) {
 
 	// Second IP can also be blocked independently
 	for range 5 {
-		rl.recordFailedAttempt("192.168.1.2")
+		rl.recordFailedAttempt("192.168.1.2", DefaultMaxRateLimitEntries)
 	}
 
 	if !rl.isBlocked("192.168.1.1") {
@@ -318,28 +318,28 @@ func TestRateLimiter_MaxEntries(t *testing.T) {
 	rl := NewAuthRateLimiter()
 
 	// Fill up to max entries
-	for i := range maxRateLimitEntries {
+	for i := range DefaultMaxRateLimitEntries {
 		ip := "192.168.1." + string(rune(i%256))
-		rl.recordFailedAttempt(ip)
+		rl.recordFailedAttempt(ip, DefaultMaxRateLimitEntries)
 	}
 
 	rl.mu.RLock()
 	count := len(rl.attempts)
 	rl.mu.RUnlock()
 
-	if count > maxRateLimitEntries {
-		t.Errorf("Should not exceed max entries %d, got %d", maxRateLimitEntries, count)
+	if count > DefaultMaxRateLimitEntries {
+		t.Errorf("Should not exceed max entries %d, got %d", DefaultMaxRateLimitEntries, count)
 	}
 
 	// Adding one more should trigger eviction
-	rl.recordFailedAttempt("10.0.0.1")
+	rl.recordFailedAttempt("10.0.0.1", DefaultMaxRateLimitEntries)
 
 	rl.mu.RLock()
 	count = len(rl.attempts)
 	rl.mu.RUnlock()
 
-	if count > maxRateLimitEntries {
-		t.Errorf("Should not exceed max entries after eviction %d, got %d", maxRateLimitEntries, count)
+	if count > DefaultMaxRateLimitEntries {
+		t.Errorf("Should not exceed max entries after eviction %d, got %d", DefaultMaxRateLimitEntries, count)
 	}
 }
 
@@ -359,7 +359,7 @@ func TestServeHTTP_RateLimitBlocked(t *testing.T) {
 
 	// Manually block an IP
 	for i := 0; i < 5; i++ {
-		ta.rateLimiter.recordFailedAttempt("192.168.1.1")
+		ta.rateLimiter.recordFailedAttempt("192.168.1.1", ta.maxEntries)
 	}
 
 	req := httptest.NewRequest("GET", "http://example.com?token=valid-token", nil)
@@ -377,15 +377,15 @@ func TestRateLimiter_LRUEviction(t *testing.T) {
 	rl := NewAuthRateLimiter()
 
 	// Add entries with different access times
-	rl.recordFailedAttempt("192.168.1.1")
+	rl.recordFailedAttempt("192.168.1.1", DefaultMaxRateLimitEntries)
 	time.Sleep(10 * time.Millisecond)
-	rl.recordFailedAttempt("192.168.1.2")
+	rl.recordFailedAttempt("192.168.1.2", DefaultMaxRateLimitEntries)
 	time.Sleep(10 * time.Millisecond)
-	rl.recordFailedAttempt("192.168.1.3")
+	rl.recordFailedAttempt("192.168.1.3", DefaultMaxRateLimitEntries)
 
 	// Manually fill to max entries (accounting for 3 already added)
 	rl.mu.Lock()
-	for i := range maxRateLimitEntries - 3 {
+	for i := range DefaultMaxRateLimitEntries - 3 {
 		ip := "10.0.0." + string(rune(i))
 		rl.attempts[ip] = 1
 		rl.lastTry[ip] = time.Now()
@@ -398,12 +398,12 @@ func TestRateLimiter_LRUEviction(t *testing.T) {
 	initialCount := len(rl.attempts)
 	rl.mu.RUnlock()
 
-	if initialCount != maxRateLimitEntries {
-		t.Fatalf("Expected %d entries, got %d", maxRateLimitEntries, initialCount)
+	if initialCount != DefaultMaxRateLimitEntries {
+		t.Fatalf("Expected %d entries, got %d", DefaultMaxRateLimitEntries, initialCount)
 	}
 
 	// Adding a new IP should trigger eviction of the oldest (192.168.1.1)
-	rl.recordFailedAttempt("10.10.10.10")
+	rl.recordFailedAttempt("10.10.10.10", DefaultMaxRateLimitEntries)
 
 	rl.mu.RLock()
 	finalCount := len(rl.attempts)
@@ -411,8 +411,8 @@ func TestRateLimiter_LRUEviction(t *testing.T) {
 	_, hasNew := rl.attempts["10.10.10.10"]
 	rl.mu.RUnlock()
 
-	if finalCount != maxRateLimitEntries {
-		t.Errorf("Should maintain max entries %d, got %d", maxRateLimitEntries, finalCount)
+	if finalCount != DefaultMaxRateLimitEntries {
+		t.Errorf("Should maintain max entries %d, got %d", DefaultMaxRateLimitEntries, finalCount)
 	}
 
 	if hasOldest {

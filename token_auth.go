@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	TokenKey            = "token"
-	CookieKey           = "auth_session"
-	maxRateLimitEntries = 10000
+	TokenKey                   = "token"
+	CookieKey                  = "auth_session"
+	DefaultMaxRateLimitEntries = 10000
 )
 
 type AuthRateLimiter struct {
@@ -61,11 +61,11 @@ func (rl *AuthRateLimiter) resetAttemptsForIP(ip string) {
 	delete(rl.lastAccess, ip)
 }
 
-func (rl *AuthRateLimiter) recordFailedAttempt(ip string) {
+func (rl *AuthRateLimiter) recordFailedAttempt(ip string, maxEntries int) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	if len(rl.attempts) >= maxRateLimitEntries {
+	if len(rl.attempts) >= maxEntries {
 		if _, exists := rl.attempts[ip]; !exists {
 			rl.evictOldestEntry()
 		}
@@ -107,15 +107,17 @@ func hashToken(token string) string {
 }
 
 type Config struct {
-	TokenParam    string
-	CookieName    string
-	AllowedTokens []string
+	TokenParam          string
+	CookieName          string
+	AllowedTokens       []string
+	MaxRateLimitEntries int
 }
 
 func CreateConfig() *Config {
 	return &Config{
-		TokenParam: TokenKey,
-		CookieName: CookieKey,
+		TokenParam:          TokenKey,
+		CookieName:          CookieKey,
+		MaxRateLimitEntries: DefaultMaxRateLimitEntries,
 	}
 }
 
@@ -126,6 +128,7 @@ type tokenAuth struct {
 	cookieName    string
 	allowedTokens []string
 	rateLimiter   *AuthRateLimiter
+	maxEntries    int
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
@@ -135,6 +138,9 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	if len(config.CookieName) == 0 {
 		config.CookieName = CookieKey
 	}
+	if config.MaxRateLimitEntries <= 0 {
+		config.MaxRateLimitEntries = DefaultMaxRateLimitEntries
+	}
 
 	return &tokenAuth{
 		next:          next,
@@ -143,6 +149,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		cookieName:    config.CookieName,
 		allowedTokens: config.AllowedTokens,
 		rateLimiter:   NewAuthRateLimiter(),
+		maxEntries:    config.MaxRateLimitEntries,
 	}, nil
 }
 
@@ -162,7 +169,7 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	token := req.URL.Query().Get(t.tokenParam)
 	if token == "" {
 		if t.rateLimiter != nil {
-			t.rateLimiter.recordFailedAttempt(clientIP)
+			t.rateLimiter.recordFailedAttempt(clientIP, t.maxEntries)
 		}
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -170,7 +177,7 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	if !t.isTokenValid(token, false) {
 		if t.rateLimiter != nil {
-			t.rateLimiter.recordFailedAttempt(clientIP)
+			t.rateLimiter.recordFailedAttempt(clientIP, t.maxEntries)
 		}
 		http.Error(rw, "Invalid token", http.StatusUnauthorized)
 		return
