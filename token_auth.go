@@ -4,95 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/url"
-	"sync"
-	"time"
 )
-
-const (
-	TokenKey                   = "token"
-	CookieKey                  = "auth_session"
-	DefaultMaxRateLimitEntries = 10000
-)
-
-type AuthRateLimiter struct {
-	attempts map[string]int
-	lastTry  map[string]time.Time
-	mu       sync.RWMutex
-}
-
-func NewAuthRateLimiter() *AuthRateLimiter {
-	return &AuthRateLimiter{
-		attempts: make(map[string]int),
-		lastTry:  make(map[string]time.Time),
-	}
-}
-
-func (rl *AuthRateLimiter) isBlocked(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	attempts, exists := rl.attempts[ip]
-	if !exists {
-		return false
-	}
-
-	if rl.shouldResetAttemptsForIP(ip) {
-		rl.resetAttemptsForIP(ip)
-		return false
-	}
-
-	return attempts >= 5
-}
-
-func (rl *AuthRateLimiter) shouldResetAttemptsForIP(ip string) bool {
-	lastTry, exists := rl.lastTry[ip]
-	return exists && time.Since(lastTry) > time.Hour
-}
-
-func (rl *AuthRateLimiter) resetAttemptsForIP(ip string) {
-	delete(rl.attempts, ip)
-	delete(rl.lastTry, ip)
-}
-
-func (rl *AuthRateLimiter) recordFailedAttempt(ip string, maxEntries int) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	if len(rl.attempts) >= maxEntries {
-		if _, exists := rl.attempts[ip]; !exists {
-			rl.evictOldestEntry()
-		}
-	}
-
-	now := time.Now()
-	rl.attempts[ip]++
-	rl.lastTry[ip] = now
-}
-
-func (rl *AuthRateLimiter) evictOldestEntry() {
-	if len(rl.lastTry) == 0 {
-		return
-	}
-
-	var oldestIP string
-	var oldestTime time.Time
-	first := true
-
-	for ip, tryTime := range rl.lastTry {
-		if first || tryTime.Before(oldestTime) {
-			oldestIP = ip
-			oldestTime = tryTime
-			first = false
-		}
-	}
-
-	if oldestIP != "" {
-		delete(rl.attempts, oldestIP)
-		delete(rl.lastTry, oldestIP)
-	}
-}
 
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
@@ -100,17 +15,17 @@ func hashToken(token string) string {
 }
 
 type Config struct {
-	TokenParam          string
-	CookieName          string
-	AllowedTokens       []string
-	MaxRateLimitEntries int
+	TokenParam          string       `json:"tokenParam,omitempty"`
+	AllowedTokens       []string     `json:"allowedTokens,omitempty"`
+	MaxRateLimitEntries int          `json:"maxRateLimitEntries,omitempty"`
+	Cookie              CookieConfig `json:"cookie,omitempty"`
 }
 
 func CreateConfig() *Config {
 	return &Config{
-		TokenParam:          TokenKey,
-		CookieName:          CookieKey,
-		MaxRateLimitEntries: DefaultMaxRateLimitEntries,
+		TokenParam:          "token",
+		MaxRateLimitEntries: 10000,
+		Cookie:              defaultCookieConfig(),
 	}
 }
 
@@ -118,31 +33,48 @@ type tokenAuth struct {
 	next          http.Handler
 	name          string
 	tokenParam    string
-	cookieName    string
 	allowedTokens []string
 	rateLimiter   *AuthRateLimiter
 	maxEntries    int
+	cookie        *http.Cookie
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
+	if len(config.AllowedTokens) == 0 {
+		return nil, fmt.Errorf("allowedTokens cannot be empty")
+	}
+
 	if len(config.TokenParam) == 0 {
-		config.TokenParam = TokenKey
+		return nil, fmt.Errorf("tokenParam cannot be empty")
 	}
-	if len(config.CookieName) == 0 {
-		config.CookieName = CookieKey
+
+	if len(config.Cookie.Name) == 0 {
+		return nil, fmt.Errorf("cookie.Name cannot be empty")
 	}
+
 	if config.MaxRateLimitEntries <= 0 {
-		config.MaxRateLimitEntries = DefaultMaxRateLimitEntries
+		return nil, fmt.Errorf("maxRateLimitEntries must be greater than zero")
+	}
+
+	if config.Cookie.MaxAge < 0 {
+		return nil, fmt.Errorf("cookie.MaxAge cannot be negative")
 	}
 
 	return &tokenAuth{
 		next:          next,
 		name:          name,
 		tokenParam:    config.TokenParam,
-		cookieName:    config.CookieName,
 		allowedTokens: config.AllowedTokens,
 		rateLimiter:   NewAuthRateLimiter(),
 		maxEntries:    config.MaxRateLimitEntries,
+		cookie: &http.Cookie{
+			Name:     config.Cookie.Name,
+			Path:     "/",
+			HttpOnly: config.Cookie.HttpOnly,
+			Secure:   config.Cookie.Secure,
+			MaxAge:   config.Cookie.MaxAge,
+			SameSite: parseSameSite(config.Cookie.SameSite),
+		},
 	}, nil
 }
 
@@ -153,7 +85,7 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cookie, err := req.Cookie(t.cookieName)
+	cookie, err := req.Cookie(t.cookie.Name)
 	if err == nil && t.isTokenValid(cookie.Value, true) {
 		t.next.ServeHTTP(rw, req)
 		return
@@ -176,16 +108,8 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tokenHash := hashToken(token)
-	cookie = &http.Cookie{
-		Name:     t.cookieName,
-		Value:    tokenHash,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-	}
-	http.SetCookie(rw, cookie)
+	t.cookie.Value = hashToken(token)
+	http.SetCookie(rw, t.cookie)
 
 	q := req.URL.Query()
 	q.Del(t.tokenParam)

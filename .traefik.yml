@@ -1,11 +1,16 @@
-displayName: Query Token Authentication
+displayName: Token Authentication
 type: middleware
 import: github.com/flohoss/token-auth
-summary: Query-Token authentication middleware
+summary: Secure token-based authentication with session management and rate limiting
 testData:
   tokenParam: token
-  cookieName: auth_session
   maxRateLimitEntries: 10000
+  cookie:
+    name: auth_session
+    httpOnly: true
+    secure: true
+    sameSite: Strict
+    maxAge: 0
   allowedTokens:
     - secret-token-1
     - secret-token-2

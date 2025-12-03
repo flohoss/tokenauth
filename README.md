@@ -45,8 +45,13 @@ http:
       plugin:
         token-auth:
           tokenParam: 'token'
-          cookieName: 'auth_session'
           maxRateLimitEntries: 10000
+          cookie:
+            name: 'auth_session'
+            httpOnly: true
+            secure: true
+            sameSite: 'Strict'
+            maxAge: 0
           allowedTokens:
             - 'your-secret-token-1'
             - 'your-secret-token-2'
@@ -57,8 +62,12 @@ Or with Docker labels:
 ```yaml
 labels:
   - 'traefik.http.middlewares.auth.plugin.token-auth.tokenParam=token'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookieName=auth_session'
   - 'traefik.http.middlewares.auth.plugin.token-auth.maxRateLimitEntries=10000'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.name=auth_session'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.httpOnly=true'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.secure=true'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.sameSite=Strict'
+  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.maxAge=0'
   - 'traefik.http.middlewares.auth.plugin.token-auth.allowedTokens[0]=replace-with-secure-token'
 ```
 
@@ -83,12 +92,16 @@ labels:
 
 ## Configuration Options
 
-| Parameter             | Type     | Default          | Description                                       |
-| --------------------- | -------- | ---------------- | ------------------------------------------------- |
-| `tokenParam`          | string   | `"token"`        | Query parameter name for the authentication token |
-| `cookieName`          | string   | `"auth_session"` | Name of the session cookie                        |
-| `maxRateLimitEntries` | int      | `10000`          | Maximum number of IPs tracked by rate limiter     |
-| `allowedTokens`       | []string | `[]`             | List of valid authentication tokens               |
+| Parameter              | Type     | Default          | Description                                         |
+| ---------------------- | -------- | ---------------- | --------------------------------------------------- |
+| `tokenParam`           | string   | `"token"`        | Query parameter name for the authentication token   |
+| `maxRateLimitEntries`  | int      | `10000`          | Maximum number of IPs tracked by rate limiter       |
+| `cookie.name`          | string   | `"auth_session"` | Name of the session cookie                          |
+| `cookie.httpOnly`      | bool     | `true`           | Set HttpOnly flag on cookies                        |
+| `cookie.secure`        | bool     | `true`           | Set Secure flag on cookies (requires HTTPS)         |
+| `cookie.sameSite`      | string   | `"Strict"`       | SameSite attribute: "Strict", "Lax", or "None"     |
+| `cookie.maxAge`        | int      | `0`              | Cookie max age in seconds (0 = session cookie)      |
+| `allowedTokens`        | []string | `[]`             | List of valid authentication tokens                 |
 
 ## Usage
 
@@ -107,9 +120,19 @@ labels:
 
 ### Session Cookie Details
 
-- **Duration**: Session cookie (expires when browser closes)
-- **Security**: HttpOnly, Secure, SameSite=Strict
+- **Duration**: Configurable via `cookieMaxAge` (default: session cookie that expires when browser closes)
+- **Security**: Configurable via `cookieHttpOnly`, `cookieSecure`, `cookieSameSite` (defaults: HttpOnly=true, Secure=true, SameSite=Strict)
 - **Storage**: SHA-256 hash of the token (not plaintext)
+
+**Example: Persistent cookie for 30 days**
+```yaml
+middlewares:
+  my-token-auth:
+    plugin:
+      token-auth:
+        cookieMaxAge: 2592000  # 30 days in seconds
+        # ... other config
+```
 
 ## Rate Limiting
 
