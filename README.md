@@ -20,8 +20,8 @@ Add the plugin to your Traefik static configuration:
 ```yaml
 experimental:
   plugins:
-    token-auth:
-      moduleName: github.com/flohoss/token-auth
+    tokenauth:
+      moduleName: github.com/flohoss/tokenauth
       version: v0.1.0
 ```
 
@@ -29,8 +29,8 @@ Or with Docker labels:
 
 ```yaml
 labels:
-  - 'traefik.experimental.plugins.token-auth.modulename=github.com/flohoss/token-auth'
-  - 'traefik.experimental.plugins.token-auth.version=v0.1.0'
+  - 'traefik.experimental.plugins.tokenauth.modulename=github.com/flohoss/tokenauth'
+  - 'traefik.experimental.plugins.tokenauth.version=v0.1.0'
 ```
 
 ### Dynamic Configuration
@@ -41,9 +41,9 @@ Configure the middleware in your dynamic configuration:
 # config.yml
 http:
   middlewares:
-    my-token-auth:
+    my-tokenauth:
       plugin:
-        token-auth:
+        tokenauth:
           tokenParam: 'token'
           maxRateLimitEntries: 10000
           cookie:
@@ -61,14 +61,14 @@ Or with Docker labels:
 
 ```yaml
 labels:
-  - 'traefik.http.middlewares.auth.plugin.token-auth.tokenParam=token'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.maxRateLimitEntries=10000'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.name=auth_session'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.httpOnly=true'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.secure=true'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.sameSite=Strict'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.cookie.maxAge=0'
-  - 'traefik.http.middlewares.auth.plugin.token-auth.allowedTokens[0]=replace-with-secure-token'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.tokenParam=token'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.maxRateLimitEntries=10000'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.cookie.name=auth_session'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.cookie.httpOnly=true'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.cookie.secure=true'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.cookie.sameSite=Strict'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.cookie.maxAge=0'
+  - 'traefik.http.middlewares.auth.plugin.tokenauth.allowedTokens[0]=replace-with-secure-token'
 ```
 
 ### Apply to Routes
@@ -80,14 +80,14 @@ http:
       rule: 'Host(`example.com`)'
       service: my-service
       middlewares:
-        - my-token-auth
+        - my-tokenauth
 ```
 
 Or with Docker:
 
 ```yaml
 labels:
-  - 'traefik.http.routers.my-router.middlewares=my-token-auth@docker'
+  - 'traefik.http.routers.my-router.middlewares=my-tokenauth@docker'
 ```
 
 ## Configuration Options
@@ -127,9 +127,9 @@ labels:
 **Example: Persistent cookie for 30 days**
 ```yaml
 middlewares:
-  my-token-auth:
+  my-tokenauth:
     plugin:
-      token-auth:
+      tokenauth:
         cookieMaxAge: 2592000  # 30 days in seconds
         # ... other config
 ```

@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/flohoss/token-auth/pkg/cookie"
-	"github.com/flohoss/token-auth/pkg/ratelimiter"
-	"github.com/flohoss/token-auth/pkg/token"
+	"github.com/flohoss/tokenauth/pkg/cookie"
+	"github.com/flohoss/tokenauth/pkg/ratelimiter"
+	"github.com/flohoss/tokenauth/pkg/token"
 )
 
 type Config struct {

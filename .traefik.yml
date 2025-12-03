@@ -1,6 +1,6 @@
 displayName: Token Authentication
 type: middleware
-import: github.com/flohoss/token-auth
+import: github.com/flohoss/tokenauth
 summary: Secure token-based authentication with session management and rate limiting
 testData:
   tokenParam: token
