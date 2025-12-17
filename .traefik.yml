@@ -1,10 +1,10 @@
 displayName: Token Authentication
 type: middleware
 import: github.com/flohoss/tokenauth
-summary: Secure token-based authentication with session management and rate limiting
+summary: Secure token-based authentication with session management
 testData:
   tokenParam: token
-  maxRateLimitEntries: 10000
+  errorRedirectURL: /access-denied
   cookie:
     name: auth_session
     httpOnly: true
@@ -12,5 +12,5 @@ testData:
     sameSite: Strict
     maxAge: 0
   allowedTokens:
-    - secret-token-1
-    - secret-token-2
+    - abcdefghijklmnopqrstuvwxyz012345
+    - zyxwvutsrqponmlkjihgfedcba543210
