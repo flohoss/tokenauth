@@ -124,7 +124,7 @@ labels:
 | Parameter          | Type     | Default          | Description                                               |
 | ------------------ | -------- | ---------------- | --------------------------------------------------------- |
 | `tokenParam`       | string   | `"token"`        | Query parameter name for the authentication token         |
-| `errorRedirectURL` | string   | empty            | Redirect URL for auth failures (if empty, shows 403 page) |
+| `errorRedirectURL` | string   | empty            | Absolute URL for auth failures (must include scheme like https:// or http://, e.g., https://example.com/error) |
 | `cookie.name`      | string   | `"auth_session"` | Name of the session cookie                                |
 | `cookie.httpOnly`  | bool     | `true`           | Set HttpOnly flag on cookies                              |
 | `cookie.secure`    | bool     | `true`           | Set Secure flag on cookies (requires HTTPS)               |
@@ -148,9 +148,13 @@ The response does not reveal whether the failure was due to invalid token format
 
 ### Error Responses
 
+### Error Responses
+
 When authentication fails, the middleware handles it in one of two ways:
 
 **Option 1: Custom Error Redirect (Recommended)**
+
+Redirect to an absolute URL with full scheme and host:
 
 ```yaml
 middlewares:
@@ -163,7 +167,13 @@ middlewares:
           - your-secret-token-abcdefghij1234
 ```
 
-Users are redirected with `HTTP 303 See Other` to your custom error page.
+Or with port:
+
+```yaml
+errorRedirectURL: http://localhost:8080/error
+```
+
+Users are redirected with `HTTP 303 See Other` to your custom error page. The `errorRedirectURL` **must be an absolute URL** (e.g., `https://example.com/error` or `http://localhost:8080/error`) - relative URLs like `/error` are not allowed.
 
 **Option 2: Plain Text 403 Response (Default)**
 If `errorRedirectURL` is not configured, users receive:

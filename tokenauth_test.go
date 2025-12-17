@@ -103,19 +103,24 @@ func TestInvalidErrorRedirectURL(t *testing.T) {
 		expectError      bool
 	}{
 		{
-			name:             "valid relative URL",
-			errorRedirectURL: "/error",
+			name:             "valid absolute URL with https",
+			errorRedirectURL: "https://example.com/error",
 			expectError:      false,
 		},
 		{
-			name:             "valid absolute URL",
-			errorRedirectURL: "https://example.com/error",
+			name:             "valid absolute URL with http",
+			errorRedirectURL: "http://localhost:8080/error",
 			expectError:      false,
 		},
 		{
 			name:             "empty string is valid",
 			errorRedirectURL: "",
 			expectError:      false,
+		},
+		{
+			name:             "relative URL is invalid",
+			errorRedirectURL: "/error",
+			expectError:      true,
 		},
 		{
 			name:             "invalid URL with bad characters",
@@ -150,7 +155,7 @@ func TestValidConfig(t *testing.T) {
 		TokenParam:       "token",
 		AllowedTokens:    []string{"abcdefghijklmnopqrstuvwxyz012345"},
 		Cookie:           cookie.DefaultCookieConfig(),
-		ErrorRedirectURL: "/error",
+		ErrorRedirectURL: "https://example.com/error",
 	}
 
 	handler, err := New(context.Background(), http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {}), config, "test")

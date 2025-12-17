@@ -58,8 +58,12 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 	}
 
 	if config.ErrorRedirectURL != "" {
-		if _, err := url.Parse(config.ErrorRedirectURL); err != nil {
+		parsedURL, err := url.Parse(config.ErrorRedirectURL)
+		if err != nil {
 			return nil, fmt.Errorf("errorRedirectURL is not a valid URL: %w", err)
+		}
+		if parsedURL.Scheme == "" {
+			return nil, fmt.Errorf("errorRedirectURL must be an absolute URL (e.g., https://example.com/error)")
 		}
 	}
 
