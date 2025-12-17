@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/flohoss/tokenauth/pkg/cookie"
 	"github.com/flohoss/tokenauth/pkg/token"
 )
 
 type Config struct {
-	TokenParam    string              `json:"tokenParam,omitempty"`
-	AllowedTokens []string            `json:"allowedTokens,omitempty"`
-	Cookie        cookie.CookieConfig `json:"cookie,omitempty"`
+	TokenParam       string              `json:"tokenParam,omitempty"`
+	AllowedTokens    []string            `json:"allowedTokens,omitempty"`
+	Cookie           cookie.CookieConfig `json:"cookie,omitempty"`
+	ErrorRedirectURL string              `json:"errorRedirectURL,omitempty"`
 }
 
 func CreateConfig() *Config {
@@ -23,12 +25,13 @@ func CreateConfig() *Config {
 }
 
 type tokenAuth struct {
-	next          http.Handler
-	name          string
-	tokenParam    string
-	allowedTokens []string
-	token         *token.Token
-	cookieConfig  cookie.CookieConfig
+	next             http.Handler
+	name             string
+	tokenParam       string
+	allowedTokens    []string
+	token            *token.Token
+	cookieConfig     cookie.CookieConfig
+	errorRedirectURL string
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
@@ -48,14 +51,36 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		return nil, fmt.Errorf("cookie.MaxAge cannot be negative")
 	}
 
+	for _, t := range config.AllowedTokens {
+		if err := token.ValidateTokenLength(t); err != nil {
+			return nil, err
+		}
+	}
+
+	if config.ErrorRedirectURL != "" {
+		if _, err := url.Parse(config.ErrorRedirectURL); err != nil {
+			return nil, fmt.Errorf("errorRedirectURL is not a valid URL: %w", err)
+		}
+	}
+
 	return &tokenAuth{
-		next:          next,
-		name:          name,
-		tokenParam:    config.TokenParam,
-		allowedTokens: config.AllowedTokens,
-		token:         token.New(config.AllowedTokens),
-		cookieConfig:  config.Cookie,
+		next:             next,
+		name:             name,
+		tokenParam:       config.TokenParam,
+		allowedTokens:    config.AllowedTokens,
+		token:            token.New(config.AllowedTokens),
+		cookieConfig:     config.Cookie,
+		errorRedirectURL: config.ErrorRedirectURL,
 	}, nil
+}
+
+func (t *tokenAuth) handleAuthFailure(rw http.ResponseWriter, req *http.Request) {
+	if t.errorRedirectURL != "" {
+		http.Redirect(rw, req, t.errorRedirectURL, http.StatusSeeOther)
+		return
+	}
+
+	http.Error(rw, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 }
 
 func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -64,7 +89,7 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if param != "" {
 		if !t.token.Valid(param, false) {
 			http.SetCookie(rw, cookie.Clear(t.cookieConfig))
-			rw.WriteHeader(http.StatusUnauthorized)
+			t.handleAuthFailure(rw, req)
 			return
 		}
 
@@ -89,5 +114,5 @@ func (t *tokenAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	rw.WriteHeader(http.StatusUnauthorized)
+	t.handleAuthFailure(rw, req)
 }

@@ -4,7 +4,17 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"fmt"
 )
+
+const MinTokenLength = 32
+
+func ValidateTokenLength(token string) error {
+	if len(token) < MinTokenLength {
+		return fmt.Errorf("token must be at least %d characters, got %d", MinTokenLength, len(token))
+	}
+	return nil
+}
 
 type Token struct {
 	AllowedTokens []string

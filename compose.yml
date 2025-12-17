@@ -29,6 +29,7 @@ services:
       # - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.cookie.secure=false'
       # - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.cookie.sameSite=Strict'
       # - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.cookie.maxAge=0'
-      - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.allowedTokens[0]=not-secure'
+      # - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.errorRedirectURL=https://google.com'
+      # - 'traefik.http.middlewares.tokenauth.plugin.tokenauth.allowedTokens[0]=abcdefghijklmnopqrstuvwxyz012345'
     expose:
       - 80

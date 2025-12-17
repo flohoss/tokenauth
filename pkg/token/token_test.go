@@ -2,6 +2,29 @@ package token
 
 import "testing"
 
+func TestValidateTokenLength(t *testing.T) {
+	tests := []struct {
+		token string
+		valid bool
+	}{
+		{"short", false},
+		{"a", false},
+		{string(make([]byte, 31)), false},
+		{string(make([]byte, 32)), true},
+		{string(make([]byte, 100)), true},
+	}
+
+	for _, tt := range tests {
+		err := ValidateTokenLength(tt.token)
+		if tt.valid && err != nil {
+			t.Errorf("ValidateTokenLength(%s) should be valid, got error: %v", tt.token, err)
+		}
+		if !tt.valid && err == nil {
+			t.Errorf("ValidateTokenLength(%s) should be invalid", tt.token)
+		}
+	}
+}
+
 func TestHashToken(t *testing.T) {
 	token := "secret-token"
 	hash1 := HashToken(token)
